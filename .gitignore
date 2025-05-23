@@ -32,3 +32,6 @@
 *.app
 
 CentauriCarbonBootloader/.pio
+YModemUploader/.vs
+YModemUploader/YModemUploader/bin
+YModemUploader/YModemUploader/obj

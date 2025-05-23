@@ -84,6 +84,11 @@ enum struct DataPacketResult : uint8_t {
     Ok,
 };
 
+enum struct ClosingPacketResult : uint8_t {
+    /// @brief The closing packet is valid and processed
+    Ok,
+};
+
 class YModem {
     private:
         static uint8_t FileName[128];
@@ -110,6 +115,12 @@ class YModem {
         static void SendByte(uint8_t data)
         {
             SerialUSB.write(data);
+        }
+
+        /// @brief Routines when the YModem communication is completely finished
+        static void FinishCommunication()
+        {
+            SerialUSB.flush();
         }
 
         /// @brief Receives a whole YModen packet.
@@ -164,7 +175,6 @@ class YModem {
 
             // Receive Packet Data
             outputBuffer[0] = receivedByte;
-            uint8_t tst[128];
             Utils::Int2Str(&tst[0], packetSize);
             for (uint16_t i = 1; i < (packetSize + PACKET_OVERHEAD); i++)
             {
@@ -275,6 +285,12 @@ class YModem {
             // }
         }
 
+        static ClosingPacketResult HandleCRC16ClosingPacket(uint8_t* packetBuffer)
+        {
+            // TODO: Validate CRC16
+            return ClosingPacketResult::Ok;
+        }
+
     public:
         /// @brief Initializes the required hardwares for the YModem protocol
         static void Init() {
@@ -291,6 +307,7 @@ class YModem {
             // The amount of packets we successfully received
             int32_t packetsReceived = 0;
             volatile uint32_t /*flashdestination,*/ ramsource, flash_err;
+            uint8_t fileClosed = false;
 
             while (true)
             {
@@ -300,6 +317,7 @@ class YModem {
                 {
                     SendByte(CA);
                     SendByte(CA);
+                    FinishCommunication();
                     return ReceiveFileResult::Failed;
                 }
 
@@ -309,14 +327,8 @@ class YModem {
                     || packetResult == ReceivePacketResult::Incomplete)
                 {
                     SendByte(ACK);
+                    FinishCommunication();
                     return ReceiveFileResult::Failed;
-                }
-
-                // If we successfully reached the end of file
-                if (packetResult == ReceivePacketResult::FileDone)
-                {
-                    SendByte(ACK);
-                    return ReceiveFileResult::Ok;
                 }
 
                 // If the host aborted the packet
@@ -324,14 +336,18 @@ class YModem {
                 {
                     SendByte(CA);
                     SendByte(CA);
+                    FinishCommunication();
                     return ReceiveFileResult::Failed;
                 }
 
-                // Check if the received packet's index matches what we are expecting
-                if ((packetBuffer[PACKET_SEQNO_INDEX] & 0xff) != (packetsReceived & 0xff))
+                // Special Packet for finishing the file data transfer
+                if (packetResult == ReceivePacketResult::FileDone)
                 {
-                    SendByte(NAK);
-                    return ReceiveFileResult::Failed;
+                    SendByte(ACK);
+                    SendByte(ACK);
+                    SendByte(CRC16);
+                    fileClosed = true;
+                    continue; // Another loop for expecing the closing CRC16 packet
                 }
 
                 // Status should be OK here, but add a clause just in case
@@ -339,6 +355,16 @@ class YModem {
                 {
                     SendByte(CA);
                     SendByte(CA);
+                    FinishCommunication();
+                    return ReceiveFileResult::Failed;
+                }
+
+                // Check if the received packet's index matches what we are expecting
+                if (fileClosed == false // Only check for non-closing packets. The closing packet is special
+                    && (packetBuffer[PACKET_SEQNO_INDEX] & 0xff) != (packetsReceived & 0xff))
+                {
+                    SendByte(NAK);
+                    FinishCommunication();
                     return ReceiveFileResult::Failed;
                 }
 
@@ -350,6 +376,7 @@ class YModem {
                     if (fileNameResult == FileNamePacketResult::EmptyName)
                     {
                         SendByte(ACK);
+                        FinishCommunication();
                         return ReceiveFileResult::Failed;
                     }
                     else if (fileNameResult == FileNamePacketResult::TooLarge)
@@ -370,6 +397,24 @@ class YModem {
                         SendByte(CA);
                     }
                 }
+                else if (fileClosed)
+                {
+                    auto result = HandleCRC16ClosingPacket(packetBuffer);
+
+                    if (result == ClosingPacketResult::Ok)
+                    {
+                        SendByte(ACK);
+                        FinishCommunication();
+                        return ReceiveFileResult::Ok;
+                    }
+                    else
+                    {
+                        SendByte(CA);
+                        SendByte(CA);
+                        FinishCommunication();
+                        return ReceiveFileResult::Failed;
+                    }
+                }
                 else // Regular Data Packets
                 {
                     auto dataPacketResult = HandleDataPacket();
@@ -383,15 +428,15 @@ class YModem {
                     {
                         SendByte(CA);
                         SendByte(CA);
+                        FinishCommunication();
                         return ReceiveFileResult::Failed;
                     }
                 }
-
-                //SendByte(CRC16);
             }
 
             SendByte(CA);
             SendByte(CA);
+            FinishCommunication();
             return ReceiveFileResult::Failed;
         }
 };

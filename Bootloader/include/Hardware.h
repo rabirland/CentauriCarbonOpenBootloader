@@ -15,5 +15,15 @@ class Hardware {
 
         /// @brief  The offset from `STM32BaseAddress` where the reset handler address is stored within the stock elegoo firmware
         ///         assuming it's flashed to `STM32BaseAddress + FirmwareBinaryFileOffset`
-        static const int32_t FirmwareResetHandlerOffset = 0xC000;
+        static const int32_t FirmwareCodeOffset = 0xC000;
 };
+
+/*
+new full-speed USB device number 11 using xhci_hcd
+[134278.118540] usb 1-1.2: New USB device found, idVendor=1d50, idProduct=614e, bcdDevice= 1.00
+[134278.118568] usb 1-1.2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[134278.118582] usb 1-1.2: Product: stm32f401xc
+[134278.118592] usb 1-1.2: Manufacturer: Klipper
+[134278.118602] usb 1-1.2: SerialNumber: 39002C000B51333235353836
+
+*/

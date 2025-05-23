@@ -10,11 +10,14 @@ void setup() {
 
   // First 32bit is the stack pointer address
   // Second 4 bytes are the reset handler (which is also the entry point)
-  volatile uint32_t* stackAddressPointer = (uint32_t*)(Hardware::STM32BaseAddress + Hardware::FirmwareResetHandlerOffset);
-  volatile uint32_t* entryPointPointer = (uint32_t*)(Hardware::STM32BaseAddress + Hardware::FirmwareResetHandlerOffset + 0x4);
+  volatile uint32_t* stackAddressPointer = (volatile uint32_t*)(Hardware::STM32BaseAddress + Hardware::FirmwareCodeOffset);
+  volatile uint32_t* entryPointPointer = (volatile uint32_t*)(Hardware::STM32BaseAddress + Hardware::FirmwareCodeOffset + 0x4);
 
   volatile uint32_t stackAddress = *stackAddressPointer;
   volatile uint32_t entryPoint = *entryPointPointer;
+
+  SerialUSB.end();
+  delay(1000);
 
   void (*FirmwareEntryPoint)(void) = (void (*)(void))entryPoint;
 
@@ -31,3 +34,12 @@ void setup() {
 
 void loop() {
 }
+
+/*
+"earlephilhower": {
+        "usb_vid": "0x1d50",
+        "usb_pid": "0x614e",
+        "usb_manufacturer": "Klipper",
+        "usb_product": "stm32f401xc"
+    }
+*/
